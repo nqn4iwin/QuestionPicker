@@ -1,0 +1,10 @@
+[project]
+name = "pdf-questionnaire"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "kiwipiepy>=0.23.1",
+    "pymupdf>=1.27.2.3",
+    "sentence-transformers>=5.5.0",
+]

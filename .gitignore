@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local secrets (e.g. future LLM API keys)
+.env
+
+# Local notes / backlog (not versioned)
+todo.md
+
+# Pipeline outputs (regenerate from PDF)
+*.json
+example_assets/
+.*.embeddings.*.pkl
+
+# Local debug / samples
+_diag*.txt
+_extract*.txt
+_q*.txt
+_test*.txt
+
+# Agents
+.cursor/
