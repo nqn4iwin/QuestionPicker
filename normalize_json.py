@@ -13,14 +13,12 @@ def main() -> None:
     )
     parser.add_argument(
         "json",
-        nargs="?",
-        default="example.json",
-        help="Input JSON (default: example.json)",
+        help="Input JSON (e.g. json/0518-1634-example.json)",
     )
     parser.add_argument(
         "-o",
         "--output",
-        help="Output path (default: <name>.corrected.json)",
+        help="Output path (default: json/MMDD-HHMM-<stem>-corrected.json)",
     )
     parser.add_argument(
         "--kiwi",

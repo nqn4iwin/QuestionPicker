@@ -16,8 +16,9 @@ wheels/
 todo.md
 
 # Pipeline outputs (regenerate from PDF)
-*.json
-example_assets/
+json/*
+docx/*
+**/*_assets/
 .*.embeddings.*.pkl
 
 # Local debug / samples

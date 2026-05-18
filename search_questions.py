@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 from pathlib import Path
 
+from modules.output_paths import (
+    default_json_path,
+    find_latest_json_for_stem,
+)
 from modules.pdf_parse import pdf_to_json
 from modules.question_search import (
     DEFAULT_MIN_SCORE,
@@ -22,14 +25,26 @@ def _resolve_json_path(
     embedding_model: str,
 ) -> Path:
     if path.suffix.lower() == ".pdf":
-        json_path = path.with_suffix(".json")
-        if rebuild_json or not json_path.is_file():
+        stem = path.stem
+        if rebuild_json:
+            json_path = default_json_path(stem=stem)
             pdf_to_json(
                 path,
                 json_path,
                 embed=True,
                 embedding_model=embedding_model,
             )
+            return json_path.resolve()
+        existing = find_latest_json_for_stem(stem)
+        if existing is not None:
+            return existing.resolve()
+        json_path = default_json_path(stem=stem)
+        pdf_to_json(
+            path,
+            json_path,
+            embed=True,
+            embedding_model=embedding_model,
+        )
         return json_path.resolve()
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -52,7 +67,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        help="Filtered JSON path (default: <stem>.search-<hash>.json)",
+        help="Filtered JSON path (default: json/MMDD-HHMM-<topic>.json)",
     )
     parser.add_argument(
         "--model",
@@ -95,11 +110,11 @@ def main() -> None:
         embedding_model=args.model,
     )
 
-    if args.output:
-        output_path = Path(args.output)
-    else:
-        slug = hashlib.sha256(args.topic.strip().encode("utf-8")).hexdigest()[:8]
-        output_path = json_path.with_name(f"{json_path.stem}.search-{slug}.json")
+    output_path = (
+        Path(args.output)
+        if args.output
+        else default_json_path(topic=args.topic)
+    )
 
     document = search_questions(
         json_path,

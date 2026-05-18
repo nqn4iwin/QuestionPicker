@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from modules.output_paths import default_json_path
 from modules.pdf_parse import pdf_to_json
 from modules.question_search import DEFAULT_MODEL
 
@@ -22,7 +23,7 @@ def main() -> None:
     parser.add_argument(
         "-o",
         "--output",
-        help="Output JSON path (default: <pdf>.json)",
+        help="Output JSON path (default: json/MMDD-HHMM-<pdf이름>.json)",
     )
     parser.add_argument(
         "--model",
@@ -35,13 +36,19 @@ def main() -> None:
         help="Skip embedding (JSON without vectors; search will embed on first run)",
     )
     args = parser.parse_args()
+    pdf = Path(args.pdf)
+    out_path = (
+        Path(args.output)
+        if args.output
+        else default_json_path(stem=pdf.stem)
+    )
     out = pdf_to_json(
-        args.pdf,
-        args.output,
+        pdf,
+        out_path,
         embed=not args.no_embed,
         embedding_model=args.model,
     )
-    assets_dir = out.parent / f"{Path(args.pdf).stem}_assets"
+    assets_dir = out.parent / f"{out.stem}_assets"
     print(f"Wrote {out}")
     if assets_dir.is_dir() and any(assets_dir.glob("*.png")):
         print(f"Wrote assets in {assets_dir}")

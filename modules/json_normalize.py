@@ -92,7 +92,12 @@ def normalize_json_file(
     if not src.is_file():
         raise FileNotFoundError(src)
 
-    dest = Path(output_path) if output_path else src.with_name(f"{src.stem}.corrected.json")
+    if output_path:
+        dest = Path(output_path)
+    else:
+        from modules.output_paths import default_json_path
+
+        dest = default_json_path(stem=src.stem, suffix="corrected")
 
     document = json.loads(src.read_text(encoding="utf-8"))
     normalized, log = normalize_document(document, use_kiwi=use_kiwi)
