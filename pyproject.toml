@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = [
+    "docx2pdf>=0.1.8; sys_platform == 'win32'",
     "kiwipiepy>=0.23.1",
     "pymupdf>=1.27.2.3",
     "python-docx>=1.2.0",

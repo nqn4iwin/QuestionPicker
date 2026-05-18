@@ -350,5 +350,31 @@ def json_to_docx(
 
     dest = Path(output_path) if output_path else source.with_suffix(".docx")
     dest = dest.resolve()
+    dest.parent.mkdir(parents=True, exist_ok=True)
     document.save(dest)
     return dest
+
+
+def json_to_docx_and_pdf(
+    json_path: Path | str,
+    docx_path: Path | str | None = None,
+    pdf_path: Path | str | None = None,
+    *,
+    questions_per_page: int = QUESTIONS_PER_WORD_PAGE,
+) -> tuple[Path, Path]:
+    """Write .docx then convert to .pdf (Windows + MS Word required for PDF)."""
+    from modules.docx_to_pdf import convert_docx_to_pdf
+    from modules.output_paths import default_pdf_path
+
+    docx = json_to_docx(
+        json_path,
+        docx_path,
+        questions_per_page=questions_per_page,
+    )
+    pdf_dest = (
+        Path(pdf_path).resolve()
+        if pdf_path is not None
+        else default_pdf_path(docx_path=docx)
+    )
+    pdf = convert_docx_to_pdf(docx, pdf_dest)
+    return docx, pdf

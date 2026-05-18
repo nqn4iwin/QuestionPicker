@@ -18,6 +18,7 @@ todo.md
 # Pipeline outputs (regenerate from PDF)
 json/*
 docx/*
+pdf/*
 **/*_assets/
 .*.embeddings.*.pkl
 

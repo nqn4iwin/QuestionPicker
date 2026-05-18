@@ -9,6 +9,7 @@ from pathlib import Path
 
 JSON_DIR = Path("json")
 DOCX_DIR = Path("docx")
+PDF_DIR = Path("pdf")
 
 _FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -30,6 +31,7 @@ def timestamp_prefix(when: datetime | None = None) -> str:
 def ensure_output_dirs() -> None:
     JSON_DIR.mkdir(parents=True, exist_ok=True)
     DOCX_DIR.mkdir(parents=True, exist_ok=True)
+    PDF_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def default_json_path(
@@ -69,6 +71,20 @@ def default_docx_path(
     else:
         label = "output"
     return DOCX_DIR / f"{prefix}-{label}.docx"
+
+
+def default_pdf_path(
+    *,
+    json_path: Path | None = None,
+    docx_path: Path | None = None,
+) -> Path:
+    """Match JSON or docx stem under pdf/ (e.g. pdf/0518-1638-윈도우10.pdf)."""
+    ensure_output_dirs()
+    if docx_path is not None:
+        return PDF_DIR / f"{Path(docx_path).stem}.pdf"
+    if json_path is not None:
+        return PDF_DIR / f"{Path(json_path).stem}.pdf"
+    raise ValueError("json_path or docx_path is required")
 
 
 def find_latest_json_for_stem(stem: str) -> Path | None:

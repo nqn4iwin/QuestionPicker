@@ -6,14 +6,14 @@ import argparse
 from pathlib import Path
 
 from modules.output_paths import default_docx_path, topic_from_document
-from modules.word_export import json_to_docx
+from modules.word_export import json_to_docx_and_pdf
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Export exam JSON to Word with 2-column pages. "
-            "Each question stays in one block (no split across columns/pages)."
+            "Export exam JSON to Word (.docx) and PDF (.pdf). "
+            "PDF requires Windows and locally installed Microsoft Word."
         )
     )
     parser.add_argument(
@@ -33,11 +33,12 @@ def main() -> None:
     else:
         output_path = default_docx_path(json_path=json_path)
 
-    out = json_to_docx(json_path, output_path)
+    docx_out, pdf_out = json_to_docx_and_pdf(json_path, output_path)
     topic = topic_from_document(json_path)
     if topic:
         print(f"Topic: {topic}")
-    print(f"Wrote {out}")
+    print(f"Wrote {docx_out}")
+    print(f"Wrote {pdf_out}")
 
 
 if __name__ == "__main__":

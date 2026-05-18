@@ -67,15 +67,19 @@ uv run python normalize_json.py your.json
 
 기본은 구두점·공백만 (`--kiwi`로 Kiwi 합치기 optional). 출력: `json/MMDD-HHMM-<stem>-corrected.json`
 
-### 4. JSON → Word
+### 4. JSON → Word + PDF
 
 ```powershell
 uv run python json_to_word.py json/0518-1634-윈도우10.json
 ```
 
+**Windows + Microsoft Word** 가 설치된 PC에서 실행하세요. Word로 `.docx`를 만든 뒤 같은 파일명으로 `.pdf`까지 생성합니다.
+
 | 옵션 | 설명 |
 |------|------|
 | `-o` | 출력 `.docx` 경로 (기본 `docx/<json과 같은 파일명>.docx`) |
+
+생성물: `docx/<stem>.docx`, `pdf/<stem>.pdf` (stem은 JSON 파일명과 동일).
 
 전체 시험지: 번호 순, 4문항·새 페이지, 표 행마다 `1|3` `2|4`. 검색 JSON: 번호 순, 4문항마다 **한 표 행**에 왼쪽 열·오른쪽 열로 위→아래 쌓기(예: 왼쪽 2·4 / 오른쪽 8·12). 문항 블록만 `cantSplit`. `assets` PNG 삽입.
 
