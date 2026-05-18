@@ -494,7 +494,13 @@ def attach_figure_assets(
         meta["assets_dir"] = assets_dir.name
 
 
-def pdf_to_json(pdf_path: Path | str, output_path: Path | str | None = None) -> Path:
+def pdf_to_json(
+    pdf_path: Path | str,
+    output_path: Path | str | None = None,
+    *,
+    embed: bool = True,
+    embedding_model: str | None = None,
+) -> Path:
     pdf = Path(pdf_path).resolve()
     if not pdf.is_file():
         raise FileNotFoundError(pdf)
@@ -505,6 +511,14 @@ def pdf_to_json(pdf_path: Path | str, output_path: Path | str | None = None) -> 
     lines = extract_pdf_lines(pdf)
     document = parse_lines_to_document(lines, pdf)
     attach_figure_assets(document, pdf, assets_dir)
+
+    if embed:
+        from modules.question_search import DEFAULT_MODEL, embed_document_questions
+
+        embed_document_questions(
+            document,
+            embedding_model or DEFAULT_MODEL,
+        )
 
     out.write_text(
         json.dumps(document, ensure_ascii=False, indent=2),

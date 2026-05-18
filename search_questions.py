@@ -8,17 +8,28 @@ from pathlib import Path
 
 from modules.pdf_parse import pdf_to_json
 from modules.question_search import (
+    DEFAULT_MIN_SCORE,
     DEFAULT_MODEL,
     search_questions,
     write_filtered_document,
 )
 
 
-def _resolve_json_path(path: Path, *, rebuild_json: bool) -> Path:
+def _resolve_json_path(
+    path: Path,
+    *,
+    rebuild_json: bool,
+    embedding_model: str,
+) -> Path:
     if path.suffix.lower() == ".pdf":
         json_path = path.with_suffix(".json")
         if rebuild_json or not json_path.is_file():
-            pdf_to_json(path, json_path)
+            pdf_to_json(
+                path,
+                json_path,
+                embed=True,
+                embedding_model=embedding_model,
+            )
         return json_path.resolve()
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -57,13 +68,13 @@ def main() -> None:
     parser.add_argument(
         "--min-score",
         type=float,
-        default=0.28,
-        help="Minimum cosine similarity (default: 0.28)",
+        default=DEFAULT_MIN_SCORE,
+        help=f"Minimum cosine similarity (default: {DEFAULT_MIN_SCORE})",
     )
     parser.add_argument(
-        "--rebuild-index",
+        "--rebuild-embeddings",
         action="store_true",
-        help="Recompute embeddings cache",
+        help="Re-embed all questions and update the source JSON",
     )
     parser.add_argument(
         "--rebuild-json",
@@ -78,7 +89,11 @@ def main() -> None:
     args = parser.parse_args()
 
     input_path = Path(args.input)
-    json_path = _resolve_json_path(input_path, rebuild_json=args.rebuild_json)
+    json_path = _resolve_json_path(
+        input_path,
+        rebuild_json=args.rebuild_json,
+        embedding_model=args.model,
+    )
 
     if args.output:
         output_path = Path(args.output)
@@ -92,7 +107,7 @@ def main() -> None:
         model_name=args.model,
         top_k=args.top,
         min_score=args.min_score,
-        rebuild_index=args.rebuild_index,
+        rebuild_embeddings=args.rebuild_embeddings,
     )
     out = write_filtered_document(document, output_path)
 

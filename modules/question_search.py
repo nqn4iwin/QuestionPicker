@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import pickle
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-DEFAULT_MODEL = "jhgan/ko-sroberta-multitask"
+DEFAULT_MODEL = "dragonkue/multilingual-e5-small-ko-v2"
 FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+DEFAULT_MIN_SCORE = 0.50
 
 
 def question_search_text(question: dict[str, Any]) -> str:
@@ -29,13 +28,6 @@ def question_search_text(question: dict[str, Any]) -> str:
             if isinstance(text, str) and text.strip():
                 parts.append(text.strip())
     return "\n".join(parts)
-
-
-def _cache_path(json_path: Path, model_name: str) -> Path:
-    digest = hashlib.sha256(
-        f"{json_path.resolve()}|{json_path.stat().st_mtime_ns}|{model_name}".encode()
-    ).hexdigest()[:16]
-    return json_path.parent / f".{json_path.stem}.embeddings.{digest}.pkl"
 
 
 def _load_encoder(model_name: str):
@@ -58,57 +50,111 @@ def _encode(model, texts: list[str]) -> np.ndarray:
     return np.asarray(vectors, dtype=np.float32)
 
 
-def _load_or_build_index(
-    json_path: Path,
-    model_name: str,
-    *,
-    rebuild: bool = False,
-) -> tuple[list[int], list[str], np.ndarray, str]:
-    document = json.loads(json_path.read_text(encoding="utf-8"))
+def embed_document_questions(
+    document: dict[str, Any],
+    model_name: str = DEFAULT_MODEL,
+) -> str:
+    """Embed each question; store vectors on questions and model id in meta."""
+    questions = document.get("questions", [])
+    if not isinstance(questions, list):
+        raise ValueError("JSON has no questions array")
+
+    texts: list[str] = []
+    targets: list[dict[str, Any]] = []
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        blob = question_search_text(question)
+        if not blob.strip():
+            question.pop("embedding", None)
+            continue
+        texts.append(blob)
+        targets.append(question)
+
+    if not texts:
+        raise ValueError("No question text to embed")
+
+    model = _load_encoder(model_name)
+    used_model = getattr(model, "model_name", None) or model_name
+    vectors = _encode(model, texts)
+    for question, vector in zip(targets, vectors, strict=True):
+        question["embedding"] = vector.tolist()
+
+    meta = document.get("meta")
+    if not isinstance(meta, dict):
+        meta = {}
+        document["meta"] = meta
+    meta["embedding_model"] = used_model
+    meta["embedding_dims"] = int(vectors.shape[1])
+    return used_model
+
+
+def document_has_embeddings(document: dict[str, Any]) -> bool:
+    questions = document.get("questions", [])
+    if not isinstance(questions, list):
+        return False
+    return any(
+        isinstance(question, dict)
+        and isinstance(question.get("embedding"), list)
+        and question["embedding"]
+        for question in questions
+    )
+
+
+def _embedding_matrix(
+    document: dict[str, Any],
+) -> tuple[list[int], np.ndarray, str]:
+    meta = document.get("meta", {})
+    if not isinstance(meta, dict):
+        meta = {}
+    model_name = meta.get("embedding_model")
+    if not isinstance(model_name, str) or not model_name:
+        raise ValueError(
+            "JSON has no embeddings; run pdf_to_json or search with --rebuild-embeddings"
+        )
+
     questions = document.get("questions", [])
     if not isinstance(questions, list):
         raise ValueError("JSON has no questions array")
 
     numbers: list[int] = []
-    texts: list[str] = []
+    rows: list[list[float]] = []
     for question in questions:
         if not isinstance(question, dict):
             continue
-        number = int(question["no"])
-        blob = question_search_text(question)
-        if not blob.strip():
+        embedding = question.get("embedding")
+        if not isinstance(embedding, list) or not embedding:
             continue
-        numbers.append(number)
-        texts.append(blob)
+        numbers.append(int(question["no"]))
+        rows.append(embedding)
 
-    if not texts:
-        raise ValueError("No question text to embed")
-
-    cache = _cache_path(json_path, model_name)
-    if not rebuild and cache.is_file():
-        with cache.open("rb") as handle:
-            cached = pickle.load(handle)
-        if (
-            cached.get("numbers") == numbers
-            and cached.get("texts") == texts
-            and cached.get("model") == model_name
-        ):
-            return numbers, texts, cached["embeddings"], model_name
-
-    model = _load_encoder(model_name)
-    used_model = getattr(model, "model_name", None) or model_name
-    embeddings = _encode(model, texts)
-    with cache.open("wb") as handle:
-        pickle.dump(
-            {
-                "numbers": numbers,
-                "texts": texts,
-                "embeddings": embeddings,
-                "model": used_model,
-            },
-            handle,
+    if not rows:
+        raise ValueError(
+            "JSON has no embeddings; run pdf_to_json or search with --rebuild-embeddings"
         )
-    return numbers, texts, embeddings, used_model
+
+    matrix = np.asarray(rows, dtype=np.float32)
+    expected_dims = meta.get("embedding_dims")
+    if isinstance(expected_dims, int) and matrix.shape[1] != expected_dims:
+        raise ValueError(
+            f"Embedding dimension mismatch: expected {expected_dims}, got {matrix.shape[1]}"
+        )
+    return numbers, matrix, model_name
+
+
+def rebuild_embeddings_in_json(
+    json_path: Path | str,
+    model_name: str = DEFAULT_MODEL,
+) -> str:
+    """Re-embed all questions and overwrite the JSON file."""
+    path = Path(json_path).resolve()
+    document = json.loads(path.read_text(encoding="utf-8"))
+    used_model = embed_document_questions(document, model_name)
+    path.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return used_model
 
 
 def search_questions(
@@ -117,8 +163,8 @@ def search_questions(
     *,
     model_name: str = DEFAULT_MODEL,
     top_k: int | None = None,
-    min_score: float = 0.28,
-    rebuild_index: bool = False,
+    min_score: float = DEFAULT_MIN_SCORE,
+    rebuild_embeddings: bool = False,
 ) -> dict[str, Any]:
     """Return ranked matches and a filtered document subset."""
     path = Path(json_path).resolve()
@@ -126,11 +172,25 @@ def search_questions(
     if not topic:
         raise ValueError("topic must not be empty")
 
-    numbers, _texts, matrix, used_model = _load_or_build_index(
-        path, model_name, rebuild=rebuild_index
-    )
+    if rebuild_embeddings:
+        rebuild_embeddings_in_json(path, model_name)
 
-    model = _load_encoder(used_model if used_model else model_name)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not document_has_embeddings(document):
+        embed_document_questions(document, model_name)
+        path.write_text(
+            json.dumps(document, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    numbers, matrix, stored_model = _embedding_matrix(document)
+    if model_name != stored_model:
+        raise ValueError(
+            f"JSON embeddings use {stored_model!r}; "
+            f"pass --model {stored_model!r} or --rebuild-embeddings"
+        )
+
+    model = _load_encoder(stored_model)
     query = _encode(model, [topic])[0]
     scores = matrix @ query
 
@@ -149,13 +209,15 @@ def search_questions(
     ]
     selected = {item["no"] for item in matches}
 
-    document = json.loads(path.read_text(encoding="utf-8"))
     questions = document.get("questions", [])
-    filtered_questions = [
-        question
-        for question in questions
-        if isinstance(question, dict) and int(question.get("no", -1)) in selected
-    ]
+    filtered_questions = []
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        if int(question.get("no", -1)) not in selected:
+            continue
+        filtered = {k: v for k, v in question.items() if k != "embedding"}
+        filtered_questions.append(filtered)
     filtered_questions.sort(key=lambda q: int(q["no"]))
 
     answer_key = document.get("answer_key", [])
@@ -169,9 +231,14 @@ def search_questions(
     if not isinstance(meta, dict):
         meta = {}
     meta = {
+        k: v
+        for k, v in meta.items()
+        if k not in ("embedding_model", "embedding_dims")
+    }
+    meta = {
         **meta,
         "search_topic": topic,
-        "search_model": used_model,
+        "search_model": stored_model,
         "search_min_score": min_score,
         "search_match_count": len(matches),
     }
@@ -182,7 +249,7 @@ def search_questions(
         "answer_key": filtered_answers,
         "search": {
             "topic": topic,
-            "model": used_model,
+            "model": stored_model,
             "min_score": min_score,
             "matches": matches,
         },
